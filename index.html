@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Savegas Work Order Map</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f6fa; }
+  #map { width: 100%; height: 500px; }
+  #controls {
+    background: #1a2942;
+    padding: 14px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+  }
+  .cg { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
+  .cg label { color: #8fa8c8; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .cg select, .cg input[type="date"] {
+    background: #243554; border: 1px solid #334d6e; color: #e8f0fe;
+    padding: 7px 10px; border-radius: 5px; font-size: 13px;
+  }
+  #apply-btn { background: #4d8ef0; color: white; border: none; padding: 8px 20px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; align-self: flex-end; }
+  #reset-btn { background: transparent; color: #8fa8c8; border: 1px solid #334d6e; padding: 8px 16px; border-radius: 5px; font-size: 13px; cursor: pointer; align-self: flex-end; }
+  #record-count { color: #8fa8c8; font-size: 12px; align-self: flex-end; padding-bottom: 8px; margin-left: auto; }
+  #no-data { background: #1a2942; color: #8fa8c8; padding: 40px; text-align: center; font-size: 14px; display: none; }
+  .iw-title { font-size: 14px; font-weight: 700; color: #1a2942; margin-bottom: 6px; }
+  .iw-row { font-size: 12px; color: #444; margin: 3px 0; }
+  .iw-label { font-weight: 600; color: #666; }
+  .iw-link a { color: #1a73e8; text-decoration: none; font-weight: 600; }
+  .iw-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 4px; }
+  .badge-p1 { background: #fde8e8; color: #c0392b; }
+  .badge-p2 { background: #fef3e2; color: #e67e22; }
+  .badge-p3 { background: #e8f4fd; color: #2980b9; }
+  .badge-p4 { background: #eafaf1; color: #27ae60; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="no-data">No work order data received. Please load this page from the Zoho Creator app.</div>
+<div id="controls">
+  <div class="cg"><label>Technician</label><select id="filter-tech"><option value="">All Technicians</option></select></div>
+  <div class="cg"><label>Status</label><select id="filter-status"><option value="">All Statuses</option></select></div>
+  <div class="cg"><label>Type</label><select id="filter-type"><option value="">All Types</option></select></div>
+  <div class="cg"><label>Priority</label><select id="filter-priority"><option value="">All Priorities</option></select></div>
+  <div class="cg"><label>Date From</label><input type="date" id="filter-date-from"></div>
+  <div class="cg"><label>Date To</label><input type="date" id="filter-date-to"></div>
+  <button id="apply-btn" onclick="applyFilters()">Apply Filters</button>
+  <button id="reset-btn" onclick="resetFilters()">Reset</button>
+  <div id="record-count">Loading...</div>
+</div>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBHTOfllX1DzE_aRBS8oCGGvzaniWZECvo"></script>
+<script>
+var ALL_RECORDS = [];
+var CRM_BASE = "https://crm.zoho.com/crm/org665943371/tab";
+var map, markers = [], infoWindow, geocoder;
+var geocodeQueue = [], geocodeIndex = 0, visibleRecords = [];
+
+function getPinIcon(p) {
+  p = (p||"").toUpperCase();
+  if(p==="P 1") return "http://maps.google.com/mapfiles/ms/icons/red-dot.png";
+  if(p==="P 2") return "http://maps.google.com/mapfiles/ms/icons/orange-dot.png";
+  if(p==="P 3") return "http://maps.google.com/mapfiles/ms/icons/blue-dot.png";
+  if(p==="P 4") return "http://maps.google.com/mapfiles/ms/icons/green-dot.png";
+  return "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png";
+}
+
+function getBadgeClass(p) {
+  p=(p||"").toUpperCase();
+  if(p==="P 1") return "badge-p1";
+  if(p==="P 2") return "badge-p2";
+  if(p==="P 3") return "badge-p3";
+  return "badge-p4";
+}
+
+function buildInfoContent(wo) {
+  return "<div style='min-width:220px;max-width:280px;padding:4px'>" +
+    "<div class='iw-title'>"+(wo.property||"Unknown Property")+"</div>" +
+    "<div class='iw-row iw-link'><a href='"+CRM_BASE+"/Work_Orders/"+wo.id+"' target='_blank'>WO: "+(wo.name||wo.id)+"</a>" +
+    "<span class='iw-badge "+getBadgeClass(wo.priority)+"'>"+(wo.priority||"")+"</span></div>" +
+    "<div class='iw-row'><span class='iw-label'>Status:</span> "+(wo.status||"")+"</div>" +
+    "<div class='iw-row'><span class='iw-label'>Tech:</span> "+(wo.tech||"Unassigned")+"</div>" +
+    "<div class='iw-row'><span class='iw-label'>Est Visit:</span> "+(wo.date||"")+"</div>" +
+    "<div class='iw-row'><span class='iw-label'>Type:</span> "+(wo.type||"")+"</div>" +
+    "<div class='iw-row'><span class='iw-label'>Address:</span> "+wo.street+", "+wo.city+", "+wo.state+"</div>" +
+    "</div>";
+}
+
+function fillSelect(id, opts) {
+  var sel = document.getElementById(id);
+  while(sel.options.length > 1) sel.remove(1);
+  opts.forEach(function(o) { var x=document.createElement("option"); x.value=o; x.text=o; sel.add(x); });
+}
+
+function populateFilters(recs) {
+  var t={},s={},y={},p={};
+  recs.forEach(function(wo) {
+    if(wo.tech) t[wo.tech]=1;
+    if(wo.status) s[wo.status]=1;
+    if(wo.type) y[wo.type]=1;
+    if(wo.priority) p[wo.priority]=1;
+  });
+  fillSelect("filter-tech",Object.keys(t).sort());
+  fillSelect("filter-status",Object.keys(s).sort());
+  fillSelect("filter-type",Object.keys(y).sort());
+  fillSelect("filter-priority",Object.keys(p).sort());
+}
+
+function clearMarkers() {
+  markers.forEach(function(m){m.setMap(null);}); markers=[];
+  if(infoWindow) infoWindow.close();
+}
+
+function updateCount() {
+  document.getElementById("record-count").textContent = visibleRecords.length+" record"+(visibleRecords.length!==1?"s":"")+" mapped";
+}
+
+function processGeocodeQueue() {
+  if(geocodeIndex>=geocodeQueue.length) return;
+  var wo=geocodeQueue[geocodeIndex]; geocodeIndex++;
+  var addr=wo.street+", "+wo.city+", "+wo.state+" "+wo.zip;
+  geocoder.geocode({address:addr},function(results,status) {
+    if(status==="OK") {
+      var marker=new google.maps.Marker({
+        position:results[0].geometry.location,
+        map:map,
+        title:wo.property||wo.name,
+        icon:getPinIcon(wo.priority)
+      });
+      (function(w,m){
+        m.addListener("click",function(){
+          infoWindow.setContent(buildInfoContent(w));
+          infoWindow.open(map,m);
+        });
+      })(wo,marker);
+      markers.push(marker);
+    }
+    setTimeout(processGeocodeQueue,150);
+  });
+}
+
+function applyFilters() {
+  var tech=document.getElementById("filter-tech").value;
+  var status=document.getElementById("filter-status").value;
+  var type=document.getElementById("filter-type").value;
+  var priority=document.getElementById("filter-priority").value;
+  var df=document.getElementById("filter-date-from").value;
+  var dt=document.getElementById("filter-date-to").value;
+  visibleRecords=ALL_RECORDS.filter(function(wo) {
+    if(tech && wo.tech!==tech) return false;
+    if(status && wo.status!==status) return false;
+    if(type && wo.type!==type) return false;
+    if(priority && wo.priority!==priority) return false;
+    if(df && wo.date && wo.date<df) return false;
+    if(dt && wo.date && wo.date>dt) return false;
+    return true;
+  });
+  clearMarkers();
+  geocodeQueue=visibleRecords.slice();
+  geocodeIndex=0;
+  processGeocodeQueue();
+  updateCount();
+}
+
+function resetFilters() {
+  ["filter-tech","filter-status","filter-type","filter-priority"].forEach(function(id){document.getElementById(id).value="";});
+  document.getElementById("filter-date-from").value="";
+  document.getElementById("filter-date-to").value="";
+  applyFilters();
+}
+
+function initMap() {
+  map = new google.maps.Map(document.getElementById("map"), {
+    center:{lat:37.7749,lng:-122.4194},
+    zoom:9
+  });
+  geocoder = new google.maps.Geocoder();
+  infoWindow = new google.maps.InfoWindow();
+
+  // Listen for data from parent Zoho Creator page
+  window.addEventListener("message", function(event) {
+    if(event.data && event.data.type === "WO_DATA") {
+      ALL_RECORDS = event.data.records;
+      populateFilters(ALL_RECORDS);
+      visibleRecords = ALL_RECORDS.slice();
+      geocodeQueue = visibleRecords.slice();
+      geocodeIndex = 0;
+      processGeocodeQueue();
+      updateCount();
+    }
+  });
+}
+
+initMap();
+</script>
+</body>
+</html>
