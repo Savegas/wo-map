@@ -14,7 +14,6 @@
   #apply-btn { background: #4d8ef0; color: white; border: none; padding: 8px 20px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; align-self: flex-end; }
   #reset-btn { background: transparent; color: #8fa8c8; border: 1px solid #334d6e; padding: 8px 16px; border-radius: 5px; font-size: 13px; cursor: pointer; align-self: flex-end; }
   #record-count { color: #8fa8c8; font-size: 12px; align-self: flex-end; padding-bottom: 8px; margin-left: auto; }
-  #no-data { background: #1a2942; color: #8fa8c8; padding: 40px; text-align: center; font-size: 14px; display: none; }
   .iw-title { font-size: 14px; font-weight: 700; color: #1a2942; margin-bottom: 6px; }
   .iw-row { font-size: 12px; color: #444; margin: 3px 0; }
   .iw-label { font-weight: 600; color: #666; }
@@ -28,7 +27,6 @@
 </head>
 <body>
 <div id="map"></div>
-<div id="no-data">No work order data received. Please load this page from the Zoho Creator app.</div>
 <div id="controls">
   <div class="cg"><label>Technician</label><select id="filter-tech"><option value="">All Technicians</option></select></div>
   <div class="cg"><label>Status</label><select id="filter-status"><option value="">All Statuses</option></select></div>
@@ -45,6 +43,12 @@ var ALL_RECORDS = [];
 var CRM_BASE = "https://crm.zoho.com/crm/org665943371/tab";
 var map, markers = [], infoWindow, geocoder;
 var geocodeQueue = [], geocodeIndex = 0, visibleRecords = [];
+
+function getUrlParam(name) {
+  var url = window.location.search;
+  var params = new URLSearchParams(url);
+  return params.get(name);
+}
 
 function getPinIcon(p) {
   p = (p||"").toUpperCase();
@@ -159,6 +163,16 @@ function resetFilters() {
   applyFilters();
 }
 
+function loadData(records) {
+  ALL_RECORDS = records;
+  populateFilters(ALL_RECORDS);
+  visibleRecords = ALL_RECORDS.slice();
+  geocodeQueue = visibleRecords.slice();
+  geocodeIndex = 0;
+  processGeocodeQueue();
+  updateCount();
+}
+
 function initMap() {
   map = new google.maps.Map(document.getElementById("map"), {
     center:{lat:37.7749,lng:-122.4194},
@@ -166,15 +180,22 @@ function initMap() {
   });
   geocoder = new google.maps.Geocoder();
   infoWindow = new google.maps.InfoWindow();
+
+  // Check for data in URL parameter
+  var dataParam = getUrlParam("data");
+  if(dataParam) {
+    try {
+      var records = JSON.parse(decodeURIComponent(dataParam));
+      loadData(records);
+    } catch(e) {
+      document.getElementById("record-count").textContent = "Error loading data";
+    }
+  }
+
+  // Also listen for postMessage
   window.addEventListener("message", function(event) {
     if(event.data && event.data.type === "WO_DATA") {
-      ALL_RECORDS = event.data.records;
-      populateFilters(ALL_RECORDS);
-      visibleRecords = ALL_RECORDS.slice();
-      geocodeQueue = visibleRecords.slice();
-      geocodeIndex = 0;
-      processGeocodeQueue();
-      updateCount();
+      loadData(event.data.records);
     }
   });
 }
