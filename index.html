@@ -185,9 +185,7 @@ function initMap() {
   var dataParam = getUrlParam("data");
   if(dataParam) {
     try {
-      var raw = dataParam.replace(/\+/g, ' ');
-var decoded = decodeURIComponent(raw);
-var records = JSON.parse(decoded.replace(/\]\[/g, ','));
+      var records = JSON.parse(decodeURIComponent(dataParam));
       loadData(records);
     } catch(e) {
       document.getElementById("record-count").textContent = "Error loading data";
