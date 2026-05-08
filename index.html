@@ -181,16 +181,13 @@ function initMap() {
   geocoder = new google.maps.Geocoder();
   infoWindow = new google.maps.InfoWindow();
 
-  // Check for data in URL parameter
-  var dataParam = getUrlParam("data");
-  if(dataParam) {
-    try {
-      var records = JSON.parse(decodeURIComponent(dataParam));
-      loadData(records);
-    } catch(e) {
-      document.getElementById("record-count").textContent = "Error loading data";
-    }
-  }
+  // Fetch data from API
+fetch("https://78b1q8bxe0.execute-api.us-west-1.amazonaws.com/api/map-data")
+  .then(function(response) { return response.json(); })
+  .then(function(records) { loadData(records); })
+  .catch(function(e) {
+    document.getElementById("record-count").textContent = "Error loading data";
+  });
 
   // Also listen for postMessage
   window.addEventListener("message", function(event) {
