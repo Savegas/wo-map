@@ -70,7 +70,7 @@ function getBadgeClass(p) {
 function buildInfoContent(wo) {
   return "<div style='min-width:220px;max-width:280px;padding:4px'>" +
     "<div class='iw-title'>"+(wo.property||"Unknown Property")+"</div>" +
-    "<div class='iw-row iw-link'><a href='"+CRM_BASE+"/Work_Orders/"+wo.id+"' target='_parent'>WO: "+(wo.name||wo.id)+"</a>" +
+    "<div class='iw-row iw-link'><a href='javascript:void(0)' onclick='window.open(\""+CRM_BASE+"/Work_Orders/"+wo.id+"\",\"_blank\")'>WO: "+(wo.name||wo.id)+"</a>" +
     "<span class='iw-badge "+getBadgeClass(wo.priority)+"'>"+(wo.priority||"")+"</span></div>" +
     "<div class='iw-row'><span class='iw-label'>Status:</span> "+(wo.status||"")+"</div>" +
     "<div class='iw-row'><span class='iw-label'>Tech:</span> "+(wo.tech||"Unassigned")+"</div>" +
