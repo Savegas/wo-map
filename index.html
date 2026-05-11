@@ -107,6 +107,11 @@ function clearMarkers() {
 
 function updateCount() {
   document.getElementById("record-count").textContent = visibleRecords.length+" record"+(visibleRecords.length!==1?"s":"")+" mapped";
+  if(markers.length>0) {
+    var bounds=new google.maps.LatLngBounds();
+    markers.forEach(function(m){bounds.extend(m.getPosition());});
+    map.fitBounds(bounds);
+  }
 }
 
 function processGeocodeQueue() {
