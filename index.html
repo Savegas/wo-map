@@ -31,7 +31,7 @@
   <div class="cg"><label>Technician</label><select id="filter-tech"><option value="">All Technicians</option></select></div>
   <div class="cg"><label>Status</label><select id="filter-status"><option value="">All Statuses</option></select></div>
   <div class="cg"><label>Type</label><select id="filter-type"><option value="">All Types</option></select></div>
-  <div class="cg"><label>Priority</label><select id="filter-priority"><option value="">All Priorities</option></select></div>
+  <div class="cg"><label>Priority</label><div id="filter-priority" style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;"><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="P 1"> P1</label><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="P 2"> P2</label><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="P 3"> P3</label><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="P 4"> P4</label></div></div>
   <div class="cg"><label>Date From</label><input type="date" id="filter-date-from"></div>
   <div class="cg"><label>Date To</label><input type="date" id="filter-date-to"></div>
   <button id="apply-btn" onclick="applyFilters()">Apply Filters</button>
