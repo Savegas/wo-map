@@ -134,7 +134,12 @@ function processGeocodeQueue() {
       })(wo,marker);
       markers.push(marker);
     }
-    setTimeout(processGeocodeQueue,150);
+    if(geocodeIndex>=geocodeQueue.length && markers.length>0) {
+  var bounds=new google.maps.LatLngBounds();
+  markers.forEach(function(m){bounds.extend(m.getPosition());});
+  map.fitBounds(bounds);
+}
+setTimeout(processGeocodeQueue,150);
   });
 }
 
