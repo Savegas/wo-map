@@ -157,7 +157,8 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  ["filter-tech","filter-status","filter-type","filter-priority"].forEach(function(id){document.getElementById(id).value="";});
+["filter-tech","filter-status","filter-type"].forEach(function(id){document.getElementById(id).value="";});
+document.querySelectorAll("#filter-priority input").forEach(function(cb){cb.checked=false;});
   document.getElementById("filter-date-from").value="";
   document.getElementById("filter-date-to").value="";
   applyFilters();
