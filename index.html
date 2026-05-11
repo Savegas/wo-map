@@ -137,14 +137,14 @@ function applyFilters() {
   var tech=document.getElementById("filter-tech").value;
   var status=document.getElementById("filter-status").value;
   var type=document.getElementById("filter-type").value;
-  var priority=document.getElementById("filter-priority").value;
+  var priority=Array.from(document.querySelectorAll("#filter-priority input:checked")).map(function(cb){return cb.value;});
   var df=document.getElementById("filter-date-from").value;
   var dt=document.getElementById("filter-date-to").value;
   visibleRecords=ALL_RECORDS.filter(function(wo) {
     if(tech && wo.tech!==tech) return false;
     if(status && wo.status!==status) return false;
     if(type && wo.type!==type) return false;
-    if(priority && wo.priority!==priority) return false;
+    if(priority.length>0 && priority.indexOf(wo.priority)===-1) return false;
     if(df && wo.date && wo.date<df) return false;
     if(dt && wo.date && wo.date>dt) return false;
     return true;
