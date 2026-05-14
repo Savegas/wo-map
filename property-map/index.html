@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Savegas Property Map</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f6fa; }
+  #map { width: 100%; height: 500px; }
+  #controls { background: #1a2942; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .cg { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
+  .cg label { color: #8fa8c8; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .cg select { background: #243554; border: 1px solid #334d6e; color: #e8f0fe; padding: 7px 10px; border-radius: 5px; font-size: 13px; }
+  #apply-btn { background: #4d8ef0; color: white; border: none; padding: 8px 20px; border-radius: 5px; font-size: 13px; font-weight: 600; cursor: pointer; align-self: flex-end; }
+  #reset-btn { background: transparent; color: #8fa8c8; border: 1px solid #334d6e; padding: 8px 16px; border-radius: 5px; font-size: 13px; cursor: pointer; align-self: flex-end; }
+  #record-count { color: #8fa8c8; font-size: 12px; align-self: flex-end; padding-bottom: 8px; margin-left: auto; }
+  .iw-title { font-size: 14px; font-weight: 700; color: #1a2942; margin-bottom: 6px; cursor: pointer; color: #1a73e8; text-decoration: underline; }
+  .iw-row { font-size: 12px; color: #444; margin: 3px 0; }
+  .iw-label { font-weight: 600; color: #666; }
+  .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-left: 4px; }
+  .badge-esp { background: #eafaf1; color: #27ae60; }
+  .badge-iip { background: #e8f4fd; color: #2980b9; }
+  .badge-sip { background: #fef3e2; color: #e67e22; }
+  .badge-data { background: #f0e8fd; color: #8e44ad; }
+  .badge-lead { background: #fde8e8; color: #c0392b; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="controls">
+  <div class="cg"><label>Status</label><div id="filter-status" style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px;"><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="ESP"> ESP</label><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="IIP"> IIP</label><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="SIP"> SIP</label><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="DATA"> DATA</label><label style="color:#e8f0fe;font-size:13px;"><input type="checkbox" value="LEAD"> LEAD</label></div></div>
+  <div class="cg"><label>State</label><select id="filter-state"><option value="">All States</option></select></div>
+  <div class="cg"><label>Area</label><select id="filter-area"><option value="">All Areas</option></select></div>
+  <button id="apply-btn" onclick="applyFilters()">Apply Filters</button>
+  <button id="reset-btn" onclick="resetFilters()">Reset</button>
+  <div id="record-count">Loading...</div>
+</div>
+<script>
+var ALL_RECORDS = [];
+var CRM_BASE = "https://crm.zoho.com/crm/org665943371/tab";
+var map, markers = [], infoWindow, geocoder;
+var geocodeQueue = [], geocodeIndex = 0, visibleRecords = [];
+
+function getUrlParam(name) {
+  var params = new URLSearchParams(window.location.search);
+  return params.get(name);
+}
+
+function getPinColor(status) {
+  status = (status||"").toUpperCase();
+  if(status.indexOf("ESP") !== -1) return "http://maps.google.com/mapfiles/ms/icons/green-dot.png";
+  if(status.indexOf("IIP") !== -1) return "http://maps.google.com/mapfiles/ms/icons/blue-dot.png";
+  if(status.indexOf("SIP") !== -1) return "http://maps.google.com/mapfiles/ms/icons/orange-dot.png";
+  if(status.indexOf("DATA") !== -1) return "http://maps.google.com/mapfiles/ms/icons/purple-dot.png";
+  if(status.indexOf("LEAD") !== -1) return "http://maps.google.com/mapfiles/ms/icons/red-dot.png";
+  return "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png";
+}
+
+function getBadgeClass(status) {
+  status = (status||"").toUpperCase();
+  if(status.indexOf("ESP") !== -1) return "badge-esp";
+  if(status.indexOf("IIP") !== -1) return "badge-iip";
+  if(status.indexOf("SIP") !== -1) return "badge-sip";
+  if(status.indexOf("DATA") !== -1) return "badge-data";
+  if(status.indexOf("LEAD") !== -1) return "badge-lead";
+  return "";
+}
+
+function buildInfoContent(p) {
+  return "<div style='min-width:220px;max-width:280px;padding:4px'>" +
+    "<div class='iw-title' onclick='top.location.href=\""+CRM_BASE+"/Accounts/"+p.id+"\"'>"+(p.name||"Unknown Property")+"</div>" +
+    "<div class='iw-row'><span class='iw-label'>Client:</span> "+(p.client||"")+"</div>" +
+    "<div class='iw-row'><span class='iw-label'>Status:</span> <span class='status-badge "+getBadgeClass(p.status)+"'>"+(p.status||"")+"</span></div>" +
+    "<div class='iw-row'><span class='iw-label'>Area:</span> "+(p.area||"")+"</div>" +
+    "<div class='iw-row'><span class='iw-label'>Phone:</span> "+(p.phone||"")+"</div>" +
+    "<div class='iw-row'><span class='iw-label'>Address:</span> "+p.street+", "+p.city+", "+p.state+" "+p.zip+"</div>" +
+    "</div>";
+}
+
+function fillSelect(id, opts) {
+  var sel = document.getElementById(id);
+  while(sel.options.length > 1) sel.remove(1);
+  opts.forEach(function(o) { var x=document.createElement("option"); x.value=o; x.text=o; sel.add(x); });
+}
+
+function populateFilters(recs) {
+  var s={}, a={};
+  recs.forEach(function(p) {
+    if(p.state) s[p.state]=1;
+    if(p.area) a[p.area]=1;
+  });
+  fillSelect("filter-state", Object.keys(s).sort());
+  fillSelect("filter-area", Object.keys(a).sort());
+}
+
+function clearMarkers() {
+  markers.forEach(function(m){m.setMap(null);}); markers=[];
+  if(infoWindow) infoWindow.close();
+}
+
+function updateCount() {
+  document.getElementById("record-count").textContent = visibleRecords.length+" propert"+(visibleRecords.length!==1?"ies":"y")+" mapped";
+}
+
+function processGeocodeQueue() {
+  if(geocodeIndex>=geocodeQueue.length) return;
+  var p=geocodeQueue[geocodeIndex]; geocodeIndex++;
+  var addr=p.street+", "+p.city+", "+p.state+" "+p.zip;
+  geocoder.geocode({address:addr},function(results,status) {
+    if(status==="OK") {
+      var marker=new google.maps.Marker({
+        position:results[0].geometry.location,
+        map:map,
+        title:p.name,
+        icon:getPinColor(p.status)
+      });
+      (function(prop,m){
+        m.addListener("click",function(){
+          infoWindow.setContent(buildInfoContent(prop));
+          infoWindow.open(map,m);
+        });
+      })(p,marker);
+      markers.push(marker);
+    }
+    if(geocodeIndex>=geocodeQueue.length && markers.length>0) {
+      var bounds=new google.maps.LatLngBounds();
+      markers.forEach(function(m){bounds.extend(m.getPosition());});
+      map.fitBounds(bounds);
+    }
+    setTimeout(processGeocodeQueue,150);
+  });
+}
+
+function applyFilters() {
+  var status=Array.from(document.querySelectorAll("#filter-status input:checked")).map(function(cb){return cb.value;});
+  var state=document.getElementById("filter-state").value;
+  var area=document.getElementById("filter-area").value;
+  visibleRecords=ALL_RECORDS.filter(function(p) {
+    if(status.length>0 && status.filter(function(s){return (p.status||"").toUpperCase().indexOf(s)!==-1;}).length===0) return false;
+    if(state && p.state!==state) return false;
+    if(area && p.area!==area) return false;
+    return true;
+  });
+  clearMarkers();
+  geocodeQueue=visibleRecords.slice();
+  geocodeIndex=0;
+  processGeocodeQueue();
+  updateCount();
+}
+
+function resetFilters() {
+  document.querySelectorAll("#filter-status input").forEach(function(cb){cb.checked=false;});
+  document.getElementById("filter-state").value="";
+  document.getElementById("filter-area").value="";
+  applyFilters();
+}
+
+function loadData(records) {
+  ALL_RECORDS = records;
+  populateFilters(ALL_RECORDS);
+  visibleRecords = ALL_RECORDS.slice();
+  geocodeQueue = visibleRecords.slice();
+  geocodeIndex = 0;
+  processGeocodeQueue();
+  updateCount();
+}
+
+function initMap() {
+  map = new google.maps.Map(document.getElementById("map"), {
+    center:{lat:37.7749,lng:-122.4194},
+    zoom:6
+  });
+  geocoder = new google.maps.Geocoder();
+  infoWindow = new google.maps.InfoWindow();
+
+  var dataParam = getUrlParam("data");
+  if(dataParam) {
+    try {
+      var records = JSON.parse(decodeURIComponent(dataParam));
+      loadData(records);
+    } catch(e) {
+      document.getElementById("record-count").textContent = "Error loading data";
+    }
+  }
+}
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBedC_BsYnNiWNdkza5mH8ZnQF8KY-m8FA&callback=initMap" async defer></script>
+</body>
+</html>
