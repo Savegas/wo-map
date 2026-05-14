@@ -173,15 +173,11 @@ function initMap() {
   geocoder = new google.maps.Geocoder();
   infoWindow = new google.maps.InfoWindow();
 
-  var dataParam = getUrlParam("data");
-  if(dataParam) {
-    try {
-      var records = JSON.parse(decodeURIComponent(dataParam));
-      loadData(records);
-    } catch(e) {
-      document.getElementById("record-count").textContent = "Error loading data";
+  window.addEventListener("message", function(event) {
+    if(event.data && event.data.type === "PROP_DATA") {
+      loadData(event.data.records);
     }
-  }
+  });
 }
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBedC_BsYnNiWNdkza5mH8ZnQF8KY-m8FA&callback=initMap" async defer></script>
